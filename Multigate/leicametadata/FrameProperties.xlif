@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<LMSDataContainerHeader Version="2" ApplicationDescription="LMSIOManager" ApplicationVersion="1.16.5782.0">
+  <Element Name="FrameProperties" Visibility="2" CopyOption="1" UniqueID="e8a76cb7-5d17-11f1-bd02-b07b2506f232">
+    <Data>
+      <SimpleListInMemory>
+        <SimpleListInMemoryDescription>
+          <SimpleColumnDescription>
+            <SimpleColumnDescription Name="CDCSIMPLELISTINMEMORYDESCRIPTION_ISCOLUMNUSEDCOLDESC" Unit="flag" MemorySize="1" />
+            <SimpleColumnDescription Name="MinIntensity" Unit="gray/rgb" MemorySize="2" />
+            <SimpleColumnDescription Name="MaxIntensity" Unit="gray/rgb" MemorySize="2" />
+            <SimpleColumnDescription Name="SumIntensity" Unit="gray/rgb" MemorySize="8" />
+          </SimpleColumnDescription>
+        </SimpleListInMemoryDescription>
+      </SimpleListInMemory>
+    </Data>
+    <Attributes>
+      <Attribute>FrameProperties</Attribute>
+    </Attributes>
+    <Memory Size="13" MemoryBlockID="">
+      <Block File="..%5Cframeproperties.lof" Offset="0" Size="13" UUID="805d60bd-fc9e-4a6b-932f-af3dc2541ba8" />
+    </Memory>
+    <Children />
+  </Element>
+</LMSDataContainerHeader>
