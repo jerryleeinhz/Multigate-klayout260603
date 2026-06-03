@@ -14,6 +14,7 @@ PNG_PATH = OUT_DIR / "mla_four_direction_electrodes_schematic.png"
 METAL_LAYER = 1
 MARK_LAYER = 10
 LABEL_LAYER = 11
+CENTER_GUIDE_LAYER = 90
 ETCH_LAYER = 40
 
 
@@ -33,6 +34,8 @@ PARAMS = {
     "line_gap_increment_per_step_um": 1.0,
     "straight_lead_length_um": 960.0,
     "fanout_end_um": 1300.0,
+    "pad_connector_width_um": 5.0,
+    "pad_connector_overlap_um": 10.0,
     "pad_size_um": 500.0,
     "pad_gap_um": 60.0,
     "text_size_um": 10.0,
@@ -177,6 +180,24 @@ def lead_polygons_for_electrode(name: str, electrode_index: int) -> tuple[list[l
     return polygons, prev_y, prev_w
 
 
+def pad_connector_polygon(
+    straight_end: float,
+    final_y: float,
+    final_width: float,
+    fanout_end: float,
+    pad_y: float,
+) -> list[tuple[float, float]]:
+    connector_width = PARAMS["pad_connector_width_um"]
+    overlap = PARAMS["pad_connector_overlap_um"]
+    connector_end = fanout_end + overlap
+    return [
+        (straight_end, final_y - final_width / 2),
+        (connector_end, pad_y - connector_width / 2),
+        (connector_end, pad_y + connector_width / 2),
+        (straight_end, final_y + final_width / 2),
+    ]
+
+
 def add_arm(cell: gdstk.Cell, name: str, rotation: float) -> None:
     straight_end = PARAMS["straight_lead_length_um"]
     fanout_end = PARAMS["fanout_end_um"]
@@ -190,13 +211,7 @@ def add_arm(cell: gdstk.Cell, name: str, rotation: float) -> None:
         lead_polygons, final_y, final_width = lead_polygons_for_electrode(name, idx - 1)
         for lead_polygon in lead_polygons:
             add_polygon(cell, lead_polygon, METAL_LAYER, rotation)
-        taper = [
-            (straight_end, final_y - final_width / 2),
-            (fanout_end, pad_y - pad_size / 2),
-            (fanout_end, pad_y + pad_size / 2),
-            (straight_end, final_y + final_width / 2),
-        ]
-        add_polygon(cell, taper, METAL_LAYER, rotation)
+        add_polygon(cell, pad_connector_polygon(straight_end, final_y, final_width, fanout_end, pad_y), METAL_LAYER, rotation)
         add_polygon(
             cell,
             rect_points(fanout_end, pad_y - pad_size / 2, fanout_end + pad_size, pad_y + pad_size / 2),
@@ -330,13 +345,13 @@ def add_center_square_corner_markers(cell: gdstk.Cell) -> None:
             add_polygon(
                 cell,
                 rect_points(sx * (half - tick), sy * half - width / 2, sx * half, sy * half + width / 2),
-                MARK_LAYER,
+                CENTER_GUIDE_LAYER,
                 0,
             )
             add_polygon(
                 cell,
                 rect_points(sx * half - width / 2, sy * (half - tick), sx * half + width / 2, sy * half),
-                MARK_LAYER,
+                CENTER_GUIDE_LAYER,
                 0,
             )
 
@@ -351,8 +366,8 @@ def build_gds() -> None:
     for global_x, ns_gap in zip(sorted(electrode_offsets()), PARAMS["ns_center_gaps_um_west_to_east"]):
         x0 = global_x - PARAMS["line_width_um"] / 2
         x1 = global_x + PARAMS["line_width_um"] / 2
-        add_polygon(top, rect_points(x0, -ns_gap / 2, x1, ns_gap / 2), MARK_LAYER, 0)
-        top.add(gdstk.Label(f"{ns_gap:g}um", (global_x, 0), anchor="o", layer=LABEL_LAYER))
+        add_polygon(top, rect_points(x0, -ns_gap / 2, x1, ns_gap / 2), CENTER_GUIDE_LAYER, 0)
+        top.add(gdstk.Label(f"{ns_gap:g}um", (global_x, 0), anchor="o", layer=CENTER_GUIDE_LAYER))
 
     ew_start = center_start_for_arm("E", electrode_offsets()[0])
     top.add(
@@ -360,10 +375,10 @@ def build_gds() -> None:
             f"Opposing gap {PARAMS['opposing_electrode_gap_um']:g}um",
             (0, -18),
             anchor="o",
-            layer=LABEL_LAYER,
+            layer=CENTER_GUIDE_LAYER,
         )
     )
-    add_polygon(top, rect_points(-ew_start, -0.1, ew_start, 0.1), MARK_LAYER, 0)
+    add_polygon(top, rect_points(-ew_start, -0.1, ew_start, 0.1), CENTER_GUIDE_LAYER, 0)
     add_center_square_corner_markers(top)
 
     add_gap_step_labels(top)
@@ -393,6 +408,7 @@ def draw_schematic() -> None:
 
     metal = (64, 104, 184)
     marker = (220, 72, 54)
+    guide = (87, 129, 171)
     outline = (28, 37, 65)
     grid = (226, 230, 238)
 
@@ -420,16 +436,7 @@ def draw_schematic() -> None:
             lead_polygons, final_y, final_width = lead_polygons_for_electrode(name, idx)
             for lead_polygon in lead_polygons:
                 collect_poly(lead_polygon, METAL_LAYER, rotation)
-            collect_poly(
-                [
-                    (straight_end, final_y - final_width / 2),
-                    (fanout_end, pad_y - pad_size / 2),
-                    (fanout_end, pad_y + pad_size / 2),
-                    (straight_end, final_y + final_width / 2),
-                ],
-                METAL_LAYER,
-                rotation,
-            )
+            collect_poly(pad_connector_polygon(straight_end, final_y, final_width, fanout_end, pad_y), METAL_LAYER, rotation)
             collect_poly(rect_points(fanout_end, pad_y - pad_size / 2, fanout_end + pad_size, pad_y + pad_size / 2), METAL_LAYER, rotation)
 
     for pts, color in polygons:
@@ -461,9 +468,9 @@ def draw_schematic() -> None:
             ("4 electrodes / direction", (-410, 520), small_font, outline),
             ("0.3 um width, 1.4 um gap", (-410, 480), small_font, outline),
             ("Center electrodes equal length", (-410, 440), small_font, marker),
-            ("18 widening steps, every 50 um", (-410, 400), small_font, marker),
-            ("Final gap 19.4 um, width capped at 2.0 um", (-410, 360), small_font, marker),
-            ("500 um x 500 um wire-bond pads", (-410, 320), small_font, outline),
+            ("5 um connectors to wire-bond pads", (-410, 400), small_font, marker),
+            ("18 widening steps, width capped at 2.0 um", (-410, 360), small_font, marker),
+            ("Center guides on layer 90", (-410, 320), small_font, guide),
             ("Yuanrong Li", (1240, -1580), signature_font, outline),
             ("260528", (1240, -1680), signature_font, outline),
         ]
@@ -478,14 +485,14 @@ def draw_schematic() -> None:
             world_to_px(global_x - width / 2, ns_gap / 2, scale, img_w, img_h),
             world_to_px(global_x + width / 2, -ns_gap / 2, scale, img_w, img_h),
         ]
-        draw.rectangle([box[0], box[1]], outline=marker, width=3)
+        draw.rectangle([box[0], box[1]], outline=guide, width=3)
 
     center_half = PARAMS["unchanged_center_square_um"] / 2
     center_box = [
         world_to_px(-center_half, center_half, scale, img_w, img_h),
         world_to_px(center_half, -center_half, scale, img_w, img_h),
     ]
-    draw.rectangle([center_box[0], center_box[1]], outline=marker, width=2)
+    draw.rectangle([center_box[0], center_box[1]], outline=guide, width=2)
 
     def draw_cross_px(x: float, y: float, size: float, cross_width: float, color=marker, line_width=3) -> None:
         px, py = world_to_px(x, y, scale, img_w, img_h)
@@ -561,10 +568,10 @@ def draw_schematic() -> None:
     for global_x, ns_gap in zip(sorted(electrode_offsets()), PARAMS["ns_center_gaps_um_west_to_east"]):
         inset_draw.rectangle(
             [inset_px(global_x - width / 2, ns_gap / 2), inset_px(global_x + width / 2, -ns_gap / 2)],
-            outline=marker,
+            outline=guide,
             width=2,
         )
-        inset_draw.text((inset_px(global_x, 0)), f"{ns_gap:g}", font=small_font, anchor="mm", fill=marker)
+        inset_draw.text((inset_px(global_x, 0)), f"{ns_gap:g}", font=small_font, anchor="mm", fill=guide)
     for rot, name in (("0", "E"), ("90", "N"), ("180", "W"), ("-90", "S")):
         rotation = float(rot)
         for text, pos in ((f"{name}-A", (48, 16)), (f"{name}-B", (70, -14))):
