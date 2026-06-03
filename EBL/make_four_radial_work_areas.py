@@ -28,6 +28,7 @@ TAPER_LENGTH_UM = 100.0
 ESCAPE_LENGTH_UM = 360.0
 CENTER_ELECTRODE_WIDTH_UM = 0.3
 ROUTE_WIDTH_UM = 8.0
+SMOOTH_ROUTE_PULL_UM = 420.0
 PAD_LABEL_SIZE_UM = 200.0
 SIGNATURE_SIZE_UM = 75.0
 
@@ -125,10 +126,10 @@ def area_definitions() -> list[tuple[str, tuple[float, float], float, list[int]]
 
 def spoke_angles_for_area(name: str) -> list[float]:
     return {
-        "N": [270, 225, 180, 135, 90, 45, 0, 315],
-        "E": [180, 135, 90, 45, 0, 315, 270, 225],
-        "S": [90, 45, 0, 315, 270, 225, 180, 135],
-        "W": [0, 315, 270, 225, 180, 135, 90, 45],
+        "NW": [292.5, 247.5, 202.5, 157.5, 112.5, 67.5, 22.5, 337.5],
+        "NE": [202.5, 157.5, 112.5, 67.5, 22.5, 337.5, 292.5, 247.5],
+        "SE": [112.5, 67.5, 22.5, 337.5, 292.5, 247.5, 202.5, 157.5],
+        "SW": [22.5, 337.5, 292.5, 247.5, 202.5, 157.5, 112.5, 67.5],
     }[name]
 
 
@@ -142,29 +143,26 @@ def add_radial_area(
     circle_radius = circle_diameter / 2
     spoke_start = circle_radius
     spoke_end = circle_radius + TAPER_LENGTH_UM
-    escape_end = circle_radius + ESCAPE_LENGTH_UM
-
-    for target in targets:
-        angle = angle_to(center, target)
+    for angle, target in zip(spoke_angles_for_area(name), targets):
         p0 = polar(center, spoke_start, angle)
         p1 = polar(center, spoke_end, angle)
+        target_angle = angle_to(center, target)
+        route_distance = math.dist(p1, target)
+        route_pull = min(SMOOTH_ROUTE_PULL_UM, route_distance * 0.32)
+        start_theta = math.radians(angle)
+        target_theta = math.radians(target_angle)
+        control1 = (
+            p1[0] + route_pull * math.cos(start_theta),
+            p1[1] + route_pull * math.sin(start_theta),
+        )
+        control2 = (
+            target[0] - route_pull * math.cos(target_theta),
+            target[1] - route_pull * math.sin(target_theta),
+        )
         path = gdstk.RobustPath(p0, CENTER_ELECTRODE_WIDTH_UM, layer=METAL_LAYER)
         path.segment(p1, width=(ROUTE_WIDTH_UM, "smooth"))
-        path.segment(target, width=ROUTE_WIDTH_UM)
+        path.cubic([control1, control2, target], width=ROUTE_WIDTH_UM)
         cell.add(path)
-        corner_half = ROUTE_WIDTH_UM / 2
-        for corner_x, corner_y in (p1, target):
-            cell.add(
-                gdstk.Polygon(
-                    rect_points(
-                        corner_x - corner_half,
-                        corner_y - corner_half,
-                        corner_x + corner_half,
-                        corner_y + corner_half,
-                    ),
-                    layer=METAL_LAYER,
-                )
-            )
 
     cell.add(gdstk.ellipse(center, circle_radius, inner_radius=max(circle_radius - 0.2, 0.05), tolerance=0.02, layer=GUIDE_LAYER))
     etch_outer_radius = (circle_diameter - 1.5) / 2
