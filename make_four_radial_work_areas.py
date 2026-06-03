@@ -24,8 +24,9 @@ PAD_SIZE_UM = 380.0
 PAD_TRACK_HALF_SPAN_UM = 2050.0
 PAD_CENTER_HALF_SPAN_UM = 1660.0
 WORK_OFFSET_UM = 1150.0
-TAPER_LENGTH_UM = 140.0
+TAPER_LENGTH_UM = 100.0
 ESCAPE_LENGTH_UM = 360.0
+CENTER_ELECTRODE_WIDTH_UM = 0.3
 ROUTE_WIDTH_UM = 8.0
 PAD_LABEL_SIZE_UM = 200.0
 SIGNATURE_SIZE_UM = 75.0
@@ -115,10 +116,10 @@ def perimeter_pad_centers() -> list[tuple[float, float]]:
 
 def area_definitions() -> list[tuple[str, tuple[float, float], float, list[int]]]:
     return [
-        ("N", (0, WORK_OFFSET_UM), 6.0, [27, 0, 1, 2, 3, 4, 5, 6]),
-        ("E", (WORK_OFFSET_UM, 0), 8.0, [6, 7, 8, 9, 10, 11, 12, 13]),
-        ("S", (0, -WORK_OFFSET_UM), 10.0, [13, 14, 15, 16, 17, 18, 19, 20]),
-        ("W", (-WORK_OFFSET_UM, 0), 12.0, [20, 21, 22, 23, 24, 25, 26, 27]),
+        ("NW", (-WORK_OFFSET_UM, WORK_OFFSET_UM), 6.0, [24, 25, 26, 27, 0, 1, 2, 3]),
+        ("NE", (WORK_OFFSET_UM, WORK_OFFSET_UM), 8.0, [3, 4, 5, 6, 7, 8, 9, 10]),
+        ("SE", (WORK_OFFSET_UM, -WORK_OFFSET_UM), 10.0, [10, 11, 12, 13, 14, 15, 16, 17]),
+        ("SW", (-WORK_OFFSET_UM, -WORK_OFFSET_UM), 12.0, [17, 18, 19, 20, 21, 22, 23, 24]),
     ]
 
 
@@ -143,17 +144,13 @@ def add_radial_area(
     spoke_end = circle_radius + TAPER_LENGTH_UM
     escape_end = circle_radius + ESCAPE_LENGTH_UM
 
-    for angle, target in zip(spoke_angles_for_area(name), targets):
+    for target in targets:
+        angle = angle_to(center, target)
         p0 = polar(center, spoke_start, angle)
         p1 = polar(center, spoke_end, angle)
-        p2 = polar(center, escape_end, angle)
-        path = gdstk.RobustPath(p0, 1.0, layer=METAL_LAYER)
+        path = gdstk.RobustPath(p0, CENTER_ELECTRODE_WIDTH_UM, layer=METAL_LAYER)
         path.segment(p1, width=(ROUTE_WIDTH_UM, "smooth"))
-        control2 = (
-            target[0] + (center[0] - target[0]) * 0.28,
-            target[1] + (center[1] - target[1]) * 0.28,
-        )
-        path.cubic([p2, control2, target], width=ROUTE_WIDTH_UM)
+        path.segment(target, width=ROUTE_WIDTH_UM)
         cell.add(path)
         corner_half = ROUTE_WIDTH_UM / 2
         for corner_x, corner_y in (p1, target):
@@ -173,7 +170,7 @@ def add_radial_area(
     etch_outer_radius = (circle_diameter - 1.5) / 2
     etch_inner_radius = 1.2 / 2
     cell.add(gdstk.ellipse(center, etch_outer_radius, inner_radius=etch_inner_radius, tolerance=0.02, layer=ETCH_LAYER))
-    label_angle = {"N": 210.0, "E": 120.0, "S": 30.0, "W": -60.0}[name]
+    label_angle = {"NW": 315.0, "NE": 225.0, "SE": 135.0, "SW": 45.0}[name]
     label_position = polar(center, 48.0, label_angle)
     add_text_polygons(cell, f"x={circle_diameter:g}", label_position, 18.0, LABEL_LAYER)
 

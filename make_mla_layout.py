@@ -18,17 +18,18 @@ ETCH_LAYER = 40
 
 
 PARAMS = {
-    "line_width_um": 1.5,
-    "line_gap_um": 1.5,
+    "line_width_um": 0.3,
+    "line_gap_um": 1.4,
     "line_count_per_direction": 4,
-    "ns_center_gaps_um_west_to_east": [6.0, 8.0, 10.0, 12.0],
-    "ew_to_ns_lateral_gap_um": 1.5,
+    "ns_center_gaps_um_west_to_east": [6.0, 6.0, 6.0, 6.0],
+    "opposing_electrode_gap_um": 6.0,
     "ew_reference_electrodes": "outer",
     "unchanged_center_square_um": 100.0,
     "step_length_um": 50.0,
     "step_count": 18,
     "step_transition_um": 2.0,
-    "line_width_increment_per_step_um": 0.25,
+    "line_width_increment_per_step_um": 0.5,
+    "line_width_cap_um": 2.0,
     "line_gap_increment_per_step_um": 1.0,
     "straight_lead_length_um": 960.0,
     "fanout_end_um": 1300.0,
@@ -110,7 +111,10 @@ def offsets_for_dimensions(width: float, gap: float) -> list[float]:
 
 
 def step_dimensions(step_index: int) -> tuple[float, float, list[float]]:
-    width = PARAMS["line_width_um"] + step_index * PARAMS["line_width_increment_per_step_um"]
+    width = min(
+        PARAMS["line_width_cap_um"],
+        PARAMS["line_width_um"] + step_index * PARAMS["line_width_increment_per_step_um"],
+    )
     gap = PARAMS["line_gap_um"] + step_index * PARAMS["line_gap_increment_per_step_um"]
     return width, gap, offsets_for_dimensions(width, gap)
 
@@ -124,12 +128,7 @@ def ns_gap_by_global_x(global_x: float) -> float:
 def center_start_for_arm(name: str, fine_y: float) -> float:
     width = PARAMS["line_width_um"]
     if name in ("E", "W"):
-        offsets = electrode_offsets()
-        if PARAMS["ew_reference_electrodes"] == "middle":
-            reference_edge = min(abs(y) for y in offsets) + width / 2
-        else:
-            reference_edge = max(abs(y) for y in offsets) + width / 2
-        return reference_edge + PARAMS["ew_to_ns_lateral_gap_um"]
+        return PARAMS["opposing_electrode_gap_um"] / 2
 
     if name == "N":
         global_x = -fine_y
@@ -322,6 +321,26 @@ def add_etching_layer(cell: gdstk.Cell) -> None:
     cell.add(gdstk.ellipse((0, 0), 2.5, inner_radius=0.75, tolerance=0.02, layer=ETCH_LAYER))
 
 
+def add_center_square_corner_markers(cell: gdstk.Cell) -> None:
+    half = PARAMS["unchanged_center_square_um"] / 2
+    tick = 12.0
+    width = 0.6
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            add_polygon(
+                cell,
+                rect_points(sx * (half - tick), sy * half - width / 2, sx * half, sy * half + width / 2),
+                MARK_LAYER,
+                0,
+            )
+            add_polygon(
+                cell,
+                rect_points(sx * half - width / 2, sy * (half - tick), sx * half + width / 2, sy * half),
+                MARK_LAYER,
+                0,
+            )
+
+
 def build_gds() -> None:
     lib = gdstk.Library(unit=1e-6, precision=1e-9)
     top = lib.new_cell("MLA_FOUR_DIRECTION_ELECTRODES")
@@ -338,24 +357,14 @@ def build_gds() -> None:
     ew_start = center_start_for_arm("E", electrode_offsets()[0])
     top.add(
         gdstk.Label(
-            f"EW-NS lateral gap {PARAMS['ew_to_ns_lateral_gap_um']:g}um",
+            f"Opposing gap {PARAMS['opposing_electrode_gap_um']:g}um",
             (0, -18),
             anchor="o",
             layer=LABEL_LAYER,
         )
     )
-    add_polygon(top, rect_points(-ew_start, -8, ew_start, 8), MARK_LAYER, 0)
-    add_polygon(
-        top,
-        rect_points(
-            -PARAMS["unchanged_center_square_um"] / 2,
-            -PARAMS["unchanged_center_square_um"] / 2,
-            PARAMS["unchanged_center_square_um"] / 2,
-            PARAMS["unchanged_center_square_um"] / 2,
-        ),
-        MARK_LAYER,
-        0,
-    )
+    add_polygon(top, rect_points(-ew_start, -0.1, ew_start, 0.1), MARK_LAYER, 0)
+    add_center_square_corner_markers(top)
 
     add_gap_step_labels(top)
     add_pad_numbers(top)
@@ -450,10 +459,10 @@ def draw_schematic() -> None:
     labels.extend(
         [
             ("4 electrodes / direction", (-410, 520), small_font, outline),
-            ("1.5 um width, 1.5 um gap", (-410, 480), small_font, outline),
-            ("Center 100 um x 100 um unchanged", (-410, 440), small_font, marker),
+            ("0.3 um width, 1.4 um gap", (-410, 480), small_font, outline),
+            ("Center electrodes equal length", (-410, 440), small_font, marker),
             ("18 widening steps, every 50 um", (-410, 400), small_font, marker),
-            ("Final gap 19.5 um, width 6.0 um", (-410, 360), small_font, marker),
+            ("Final gap 19.4 um, width capped at 2.0 um", (-410, 360), small_font, marker),
             ("500 um x 500 um wire-bond pads", (-410, 320), small_font, outline),
             ("Yuanrong Li", (1240, -1580), signature_font, outline),
             ("260528", (1240, -1680), signature_font, outline),
@@ -565,7 +574,7 @@ def draw_schematic() -> None:
     ns_gap_text = "/".join(f"{gap:g}" for gap in PARAMS["ns_center_gaps_um_west_to_east"])
     inset_draw.text(
         (inset_w / 2, 26),
-        f"Center zoom: N-S gaps {ns_gap_text} um, E-W side gap {PARAMS['ew_to_ns_lateral_gap_um']:g} um",
+        f"Center zoom: opposite gaps {PARAMS['opposing_electrode_gap_um']:g} um, N-S markers {ns_gap_text} um",
         font=small_font,
         anchor="mm",
         fill=outline,
