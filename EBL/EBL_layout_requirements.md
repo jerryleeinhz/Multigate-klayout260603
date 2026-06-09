@@ -8,3 +8,4 @@
 - Keep center helper geometry on a separate non-write guide layer, not on the EBL write/marker layer.
 - Use narrow 3 um metal connectors between fine lines and wire-bond pads to reduce unnecessary exposure area.
 - For the combined 2 inch EBL wafer file, fill the wafer with the three EBL designs on a uniform 5 mm pitch grid, distribute the designs at roughly one-third of the valid die sites each, and keep the wafer outline and placement labels on separate non-write guide layers.
+- For the combined 4 inch EBL wafer file, use the same full-wafer 5 mm pitch grid and roughly one-third distribution for each of the three EBL designs.
