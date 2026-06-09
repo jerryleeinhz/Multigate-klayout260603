@@ -190,11 +190,16 @@ def pad_connector_polygon(
     connector_width = PARAMS["pad_connector_width_um"]
     overlap = PARAMS["pad_connector_overlap_um"]
     connector_end = fanout_end + overlap
+    dx = connector_end - straight_end
+    dy = pad_y - final_y
+    length = math.hypot(dx, dy)
+    nx = -dy / length * connector_width / 2
+    ny = dx / length * connector_width / 2
     return [
-        (straight_end, final_y - final_width / 2),
-        (connector_end, pad_y - connector_width / 2),
-        (connector_end, pad_y + connector_width / 2),
-        (straight_end, final_y + final_width / 2),
+        (straight_end + nx, final_y + ny),
+        (connector_end + nx, pad_y + ny),
+        (connector_end - nx, pad_y - ny),
+        (straight_end - nx, final_y - ny),
     ]
 
 
