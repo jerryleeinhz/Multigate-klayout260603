@@ -11,7 +11,7 @@ OUTPUT_GDS = OUT_DIR / "three_ebl_designs_2inch_wafer.gds"
 
 WAFER_DIAMETER_UM = 50_800.0
 WAFER_RADIUS_UM = WAFER_DIAMETER_UM / 2
-PLACEMENT_RADIUS_UM = WAFER_RADIUS_UM / 3
+SITE_PITCH_UM = 5_000.0
 
 WAFER_OUTLINE_LAYER = 100
 WAFER_LABEL_LAYER = 101
@@ -21,19 +21,16 @@ DESIGNS = (
     (
         "DIE_FOUR_PARALLEL_WORK_AREAS",
         OUT_DIR / "four_parallel_work_areas.gds",
-        90.0,
         "four_parallel_work_areas",
     ),
     (
         "DIE_FOUR_RADIAL_WORK_AREAS",
         OUT_DIR / "four_radial_work_areas.gds",
-        210.0,
         "four_radial_work_areas",
     ),
     (
         "DIE_MLA_FOUR_DIRECTION_ELECTRODES",
         OUT_DIR / "mla_four_direction_electrodes.gds",
-        330.0,
         "mla_four_direction_electrodes",
     ),
 )
@@ -50,20 +47,19 @@ def import_top_cell(path: Path, new_name: str) -> gdstk.Cell:
     return top
 
 
-def cell_half_diagonal(cell: gdstk.Cell) -> float:
+def cell_fits_wafer(cell: gdstk.Cell, origin: tuple[float, float]) -> bool:
     bbox = cell.bounding_box()
     if bbox is None:
-        return 0.0
+        return True
     (xmin, ymin), (xmax, ymax) = bbox
-    return 0.5 * math.hypot(xmax - xmin, ymax - ymin)
-
-
-def placement_origin(angle_deg: float) -> tuple[float, float]:
-    angle = math.radians(angle_deg)
-    return (
-        PLACEMENT_RADIUS_UM * math.cos(angle),
-        PLACEMENT_RADIUS_UM * math.sin(angle),
+    ox, oy = origin
+    corners = (
+        (ox + xmin, oy + ymin),
+        (ox + xmin, oy + ymax),
+        (ox + xmax, oy + ymin),
+        (ox + xmax, oy + ymax),
     )
+    return all(math.hypot(x, y) <= WAFER_RADIUS_UM for x, y in corners)
 
 
 def add_label(cell: gdstk.Cell, text: str, origin: tuple[float, float]) -> None:
@@ -77,21 +73,30 @@ def add_label(cell: gdstk.Cell, text: str, origin: tuple[float, float]) -> None:
     cell.add(*label_polys)
 
 
-def build_wafer() -> dict[str, tuple[float, float]]:
-    imported = [(name, import_top_cell(path, name), angle, label) for name, path, angle, label in DESIGNS]
+def design_index_for_site(ix: int, iy: int) -> int:
+    # This 3-coloring avoids long stripes and keeps each design near one-third of the wafer.
+    return (ix + 2 * iy) % len(DESIGNS)
+
+
+def build_wafer() -> dict[str, int]:
+    imported = [(name, import_top_cell(path, name), label) for name, path, label in DESIGNS]
 
     lib = gdstk.Library(unit=1e-6, precision=1e-9)
-    lib.add(*(cell for _, cell, _, _ in imported))
+    lib.add(*(cell for _, cell, _ in imported))
     wafer = lib.new_cell("THREE_EBL_DESIGNS_2INCH_WAFER")
 
-    placements: dict[str, tuple[float, float]] = {}
-    for name, cell, angle, label in imported:
-        origin = placement_origin(angle)
-        if math.hypot(*origin) + cell_half_diagonal(cell) > WAFER_RADIUS_UM:
-            raise ValueError(f"{name} does not fit inside the 2 inch wafer at {origin}")
-        wafer.add(gdstk.Reference(cell, origin=origin))
-        add_label(wafer, label, origin)
-        placements[name] = origin
+    grid_limit = math.ceil(WAFER_RADIUS_UM / SITE_PITCH_UM)
+    counts = {name: 0 for name, _, _ in imported}
+    for iy in range(-grid_limit, grid_limit + 1):
+        for ix in range(-grid_limit, grid_limit + 1):
+            origin = (ix * SITE_PITCH_UM, iy * SITE_PITCH_UM)
+            design_index = design_index_for_site(ix, iy)
+            name, cell, label = imported[design_index]
+            if not cell_fits_wafer(cell, origin):
+                continue
+            wafer.add(gdstk.Reference(cell, origin=origin))
+            add_label(wafer, label, origin)
+            counts[name] += 1
 
     wafer.add(
         gdstk.ellipse(
@@ -103,13 +108,14 @@ def build_wafer() -> dict[str, tuple[float, float]]:
         )
     )
     lib.write_gds(OUTPUT_GDS)
-    return placements
+    return counts
 
 
 if __name__ == "__main__":
-    placements = build_wafer()
+    counts = build_wafer()
     print(f"Wrote {OUTPUT_GDS}")
     print(f"Wafer diameter: {WAFER_DIAMETER_UM:g} um")
-    print(f"Placement radius: {PLACEMENT_RADIUS_UM:g} um")
-    for name, (x, y) in placements.items():
-        print(f"{name}: ({x:.3f}, {y:.3f}) um")
+    print(f"Site pitch: {SITE_PITCH_UM:g} um")
+    for name, count in counts.items():
+        print(f"{name}: {count}")
+    print(f"Placed total dies: {sum(counts.values())}")
