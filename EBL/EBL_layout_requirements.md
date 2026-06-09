@@ -6,4 +6,4 @@
 - For shared wire-bond electrodes, keep the existing outside pad count and keep one shared pad between each pair of adjacent working areas.
 - In each four-radial working area, distribute the 8 center electrodes uniformly around the circular center and route them to pads with smooth, tangent-continuous curves instead of sharp bends.
 - Keep center helper geometry on a separate non-write guide layer, not on the EBL write/marker layer.
-- Use narrow 5 um metal connectors between fine lines and wire-bond pads to reduce unnecessary exposure area.
+- Use narrow 3 um metal connectors between fine lines and wire-bond pads to reduce unnecessary exposure area.
