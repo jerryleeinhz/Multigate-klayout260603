@@ -7,3 +7,4 @@
 - In each four-radial working area, distribute the 8 center electrodes uniformly around the circular center and route them to pads with smooth, tangent-continuous curves instead of sharp bends.
 - Keep center helper geometry on a separate non-write guide layer, not on the EBL write/marker layer.
 - Use narrow 3 um metal connectors between fine lines and wire-bond pads to reduce unnecessary exposure area.
+- For the combined 2 inch EBL wafer file, place the three EBL designs uniformly at one-third of the wafer radius and keep the wafer outline and placement labels on separate non-write guide layers.
